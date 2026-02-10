@@ -1,0 +1,15 @@
+services:
+  fifa-card-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/larrymotalavigne/fifa-card-generator:latest
+    container_name: fifa-card-generator
+    restart: unless-stopped
+    networks:
+      - fifa-card-generator
+
+networks:
+  fifa-card-generator:
+    name: fifa-card-generator
+    driver: bridge

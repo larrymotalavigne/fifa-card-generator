@@ -1,0 +1,550 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@300;400;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Global Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  min-height: 100vh;
+  color: #f8fafc;
+}
+
+/* ========================================
+   3D Card Tilt Container
+   ======================================== */
+.card-tilt-container {
+  perspective: 1000px;
+  display: flex;
+  justify-content: center;
+}
+
+.card-tilt-inner {
+  transition: transform 0.15s ease-out;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* ========================================
+   FIFA Card Templates
+   ======================================== */
+.fifa-card {
+  @apply relative overflow-hidden;
+  width: 322px;
+  height: 450px;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: box-shadow 0.3s ease;
+
+  /* Gold Classic Template */
+  &.gold-classic {
+    background-image: url('/assets/gold.png');
+    background-size: 100% 100%;
+    filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.3));
+
+    .card-header .rating-badge,
+    .card-header .position-badge {
+      background: transparent;
+      color: #3d2c00;
+      text-shadow: none;
+    }
+
+    .player-info .player-name {
+      color: #3d2c00;
+      text-shadow: none;
+    }
+
+    .player-info .nationality-info {
+      color: #5a4200;
+      text-shadow: none;
+    }
+
+    .stats-grid .stat-item {
+      background: transparent;
+      backdrop-filter: none;
+      border-top: 1px solid rgba(61, 44, 0, 0.2);
+
+      .stat-value { color: #3d2c00; text-shadow: none; }
+      .stat-label { color: #5a4200; }
+    }
+  }
+
+  /* Dark Mode IT Template */
+  &.dark-mode-it {
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 25%, #1a1a1a 50%, #0f0f0f 75%, #1a1a1a 100%);
+    border: 2px solid #3b82f6;
+    filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.3));
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(45deg, transparent 49%, rgba(59, 130, 246, 0.1) 50%, transparent 51%);
+      background-size: 20px 20px;
+      pointer-events: none;
+    }
+
+    .card-header .rating-badge {
+      color: #60a5fa;
+    }
+    .stats-grid .stat-item .stat-value {
+      color: #60a5fa;
+    }
+  }
+
+  /* Silver Modern Template */
+  &.silver-modern {
+    background-image: url('/assets/silver.png');
+    background-size: 100% 100%;
+    filter: drop-shadow(0 0 20px rgba(192, 192, 192, 0.3));
+
+    .card-header .rating-badge,
+    .card-header .position-badge {
+      background: transparent;
+      color: #2a2a3e;
+      text-shadow: none;
+    }
+
+    .player-info .player-name {
+      color: #2a2a3e;
+      text-shadow: none;
+    }
+
+    .player-info .nationality-info {
+      color: #3d3d55;
+      text-shadow: none;
+    }
+
+    .stats-grid .stat-item {
+      background: transparent;
+      backdrop-filter: none;
+      border-top: 1px solid rgba(42, 42, 62, 0.2);
+
+      .stat-value { color: #2a2a3e; text-shadow: none; }
+      .stat-label { color: #3d3d55; }
+    }
+  }
+
+  /* Bronze Vintage Template */
+  &.bronze-vintage {
+    background-image: url('/assets/bronze.png');
+    background-size: 100% 100%;
+    filter: drop-shadow(0 0 20px rgba(205, 127, 50, 0.3));
+
+    .card-header .rating-badge,
+    .card-header .position-badge {
+      background: transparent;
+      color: #3d2010;
+      text-shadow: none;
+    }
+
+    .player-info .player-name {
+      color: #3d2010;
+      text-shadow: none;
+    }
+
+    .player-info .nationality-info {
+      color: #5a3520;
+      text-shadow: none;
+    }
+
+    .stats-grid .stat-item {
+      background: transparent;
+      backdrop-filter: none;
+      border-top: 1px solid rgba(61, 32, 16, 0.2);
+
+      .stat-value { color: #3d2010; text-shadow: none; }
+      .stat-label { color: #5a3520; }
+    }
+  }
+
+  /* TOTW (Team of the Week) Template */
+  &.totw {
+    background-image: url('/assets/totw.png');
+    background-size: 100% 100%;
+    filter: drop-shadow(0 0 25px rgba(255, 215, 0, 0.4));
+
+    .card-header .rating-badge,
+    .card-header .position-badge {
+      background: transparent;
+      color: #ffd700;
+      text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    }
+
+    .player-info .player-name {
+      color: #ffd700;
+      text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+    }
+
+    .player-info .nationality-info {
+      color: rgba(255, 255, 255, 0.9);
+      text-shadow: none;
+    }
+
+    .stats-grid .stat-item {
+      background: transparent;
+      backdrop-filter: none;
+      border-top: 1px solid rgba(255, 215, 0, 0.15);
+
+      .stat-value { color: #ffd700; text-shadow: 0 0 6px rgba(255, 215, 0, 0.3); }
+      .stat-label { color: rgba(255, 255, 255, 0.8); }
+    }
+  }
+
+  /* ========================================
+     Card Layout Elements
+     ======================================== */
+  .card-header {
+    position: absolute;
+    top: 60px;
+    left: 30px;
+    right: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    z-index: 10;
+
+    .rating-badge {
+      @apply bg-black bg-opacity-80 text-white px-1 py-0 rounded-sm;
+      font-family: 'Roboto Condensed', sans-serif;
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .position-badge {
+      @apply bg-black bg-opacity-80 text-white px-1 py-0 rounded-sm;
+      font-family: 'Roboto Condensed', sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      margin-top: 2px;
+    }
+
+    .flag-logo {
+      position: absolute;
+      top: 0;
+      right: 0;
+      font-size: 28px;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    }
+  }
+
+  .player-photo-container {
+    position: absolute;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-40%);
+    width: 170px;
+    height: 200px;
+    z-index: 5;
+
+    .player-photo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center top;
+
+      /* Shield mask */
+      clip-path: polygon(50% 0%, 90% 20%, 100% 60%, 90% 90%, 50% 100%, 10% 90%, 0% 60%, 10% 20%);
+
+      /* Circle mask alternative */
+      &.circle-mask {
+        clip-path: circle(50%);
+        border-radius: 50%;
+      }
+    }
+
+    .photo-placeholder {
+      @apply bg-gray-600 bg-opacity-30 flex items-center justify-center text-white text-4xl;
+      width: 100%;
+      height: 100%;
+      clip-path: polygon(50% 0%, 90% 20%, 100% 60%, 90% 90%, 50% 100%, 10% 90%, 0% 60%, 10% 20%);
+    }
+  }
+
+  .player-info {
+    position: absolute;
+    bottom: 140px;
+    left: 20px;
+    right: 20px;
+    text-align: center;
+    z-index: 10;
+
+    .player-name {
+      font-family: 'Roboto Condensed', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: white;
+      text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.8);
+      letter-spacing: 1px;
+      margin-bottom: 2px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .nationality-info {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.9);
+      text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.7);
+      font-weight: 500;
+    }
+  }
+
+  .stats-grid {
+    position: absolute;
+    bottom: 25px;
+    left: 30px;
+    right: 30px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 4px;
+    z-index: 10;
+
+    .stat-item {
+      @apply bg-black bg-opacity-60 rounded p-1.5 text-center;
+      backdrop-filter: blur(4px);
+
+      .stat-value {
+        font-family: 'Roboto Condensed', sans-serif;
+        font-size: 18px;
+        font-weight: 700;
+        color: white;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+        line-height: 1.2;
+      }
+
+      .stat-label {
+        font-family: 'Inter', sans-serif;
+        font-size: 9px;
+        color: rgba(255, 255, 255, 0.8);
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        line-height: 1.2;
+      }
+    }
+  }
+
+  .brand-logo {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    width: 40px;
+    height: 20px;
+    opacity: 0.7;
+    z-index: 15;
+  }
+}
+
+/* ========================================
+   Custom Range Slider Styling
+   ======================================== */
+input[type="range"].slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: #334155;
+  outline: none;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #475569;
+  }
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ffd700;
+    cursor: pointer;
+    box-shadow: 0 0 6px rgba(255, 215, 0, 0.4);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+    &:hover {
+      transform: scale(1.2);
+      box-shadow: 0 0 12px rgba(255, 215, 0, 0.6);
+    }
+
+    &:active {
+      transform: scale(1.1);
+    }
+  }
+
+  &::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ffd700;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 0 6px rgba(255, 215, 0, 0.4);
+  }
+
+  &::-moz-range-progress {
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    border-radius: 3px;
+    height: 6px;
+  }
+}
+
+/* ========================================
+   Button Press Feedback
+   ======================================== */
+button {
+  transition: transform 0.1s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+/* ========================================
+   Toast Animations
+   ======================================== */
+.toast-enter {
+  animation: toast-slide-in 0.3s ease-out;
+}
+
+.toast-exit {
+  animation: toast-slide-out 0.3s ease-in forwards;
+}
+
+@keyframes toast-slide-in {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toast-slide-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(100%); }
+}
+
+/* ========================================
+   Loading Spinner
+   ======================================== */
+.export-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffd700;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ========================================
+   File Input Custom Styling
+   ======================================== */
+.file-input-wrapper {
+  position: relative;
+  overflow: hidden;
+  display: inline-block;
+  cursor: pointer;
+
+  input[type="file"] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }
+}
+
+/* ========================================
+   Card Entrance Animation
+   ======================================== */
+.card-animate-entrance {
+  animation: card-pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes card-pop-in {
+  0% { opacity: 0; transform: scale(0.9) rotateY(-10deg); }
+  100% { opacity: 1; transform: scale(1) rotateY(0deg); }
+}
+
+/* ========================================
+   Responsive Adjustments
+   ======================================== */
+@media (max-width: 375px) {
+  .fifa-card {
+    width: 280px;
+    height: 391px;
+
+    .card-header {
+      top: 50px;
+      left: 25px;
+      .rating-badge { font-size: 26px; }
+      .position-badge { font-size: 11px; }
+    }
+
+    .player-photo-container {
+      top: 55px;
+      width: 140px;
+      height: 170px;
+    }
+
+    .player-info {
+      bottom: 120px;
+      .player-name { font-size: 16px; }
+    }
+
+    .stats-grid {
+      bottom: 18px;
+      left: 22px;
+      right: 22px;
+      .stat-item {
+        .stat-value { font-size: 15px; }
+        .stat-label { font-size: 8px; }
+      }
+    }
+  }
+}
+
+/* Disable 3D tilt on touch devices */
+@media (hover: none) {
+  .card-tilt-inner {
+    transform: none !important;
+  }
+}
+
+/* ========================================
+   High DPI rendering
+   ======================================== */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .fifa-card {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* ========================================
+   Progress Bar
+   ======================================== */
+.progress-bar-fill {
+  transition: width 0.3s ease;
+}
