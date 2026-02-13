@@ -1,5 +1,5 @@
 ### STAGE 1: Build ###
-FROM node:22-alpine AS base
+FROM node:24-alpine AS base
 WORKDIR /usr/src/app
 COPY package.json package-lock.json* ./
 RUN npm ci --legacy-peer-deps

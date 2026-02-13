@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { CommonModule } from '@angular/common';
+
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import * as htmlToImage from 'html-to-image';
@@ -24,37 +24,39 @@ interface BatchProgress {
 }
 
 @Component({
-  selector: 'app-root',
-  standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule],
-  template: `
+    selector: 'app-root',
+    imports: [FormsModule, ReactiveFormsModule],
+    template: `
     <!-- Toast Container -->
     <div class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
-      <div
-        *ngFor="let toast of toasts"
+      @for (toast of toasts; track toast) {
+        <div
         [class]="'px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 text-sm font-medium ' +
           (toast.exiting ? 'toast-exit ' : 'toast-enter ') +
           (toast.type === 'success' ? 'bg-green-600 text-white' :
            toast.type === 'error' ? 'bg-red-600 text-white' :
            toast.type === 'warning' ? 'bg-yellow-500 text-black' :
            'bg-blue-600 text-white')"
-      >
-        <span>{{ toast.type === 'success' ? '&#10003;' : toast.type === 'error' ? '&#10007;' : toast.type === 'warning' ? '!' : 'i' }}</span>
-        <span>{{ toast.message }}</span>
-      </div>
+          >
+          <span>{{ toast.type === 'success' ? '&#10003;' : toast.type === 'error' ? '&#10007;' : toast.type === 'warning' ? '!' : 'i' }}</span>
+          <span>{{ toast.message }}</span>
+        </div>
+      }
     </div>
-
+    
     <!-- Export Loading Overlay -->
-    <div *ngIf="isExporting" class="fixed inset-0 bg-black/60 z-40 flex items-center justify-center">
-      <div class="bg-slate-800 rounded-xl p-8 flex flex-col items-center gap-4 shadow-2xl">
-        <div class="export-spinner"></div>
-        <div class="text-white font-medium">{{ exportingType }}...</div>
+    @if (isExporting) {
+      <div class="fixed inset-0 bg-black/60 z-40 flex items-center justify-center">
+        <div class="bg-slate-800 rounded-xl p-8 flex flex-col items-center gap-4 shadow-2xl">
+          <div class="export-spinner"></div>
+          <div class="text-white font-medium">{{ exportingType }}...</div>
+        </div>
       </div>
-    </div>
-
+    }
+    
     <!-- Main Layout -->
     <div class="min-h-screen bg-slate-900 text-white">
-
+    
       <!-- Header -->
       <header class="bg-slate-800 shadow-lg">
         <div class="max-w-7xl mx-auto px-4 py-4 sm:py-6">
@@ -66,30 +68,30 @@ interface BatchProgress {
               <button
                 (click)="showToast('Language switching coming soon', 'info')"
                 class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors text-sm"
-              >
+                >
                 EN / FR
               </button>
               <button
                 (click)="toggleDarkMode()"
                 class="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors text-sm"
-              >
+                >
                 {{ isDarkMode ? '&#9788;' : '&#9790;' }}
               </button>
             </div>
           </div>
         </div>
       </header>
-
+    
       <!-- Main Content -->
       <main class="max-w-7xl mx-auto px-4 py-6 sm:py-8">
         <div class="grid lg:grid-cols-3 gap-6 lg:gap-8">
-
+    
           <!-- Center: Card Preview (first on mobile) -->
           <div class="lg:col-span-1 order-first lg:order-2">
             <div class="sticky top-8">
               <div class="bg-slate-800 rounded-xl shadow-xl p-4 sm:p-6">
                 <h3 class="text-lg font-semibold mb-4 text-center text-yellow-400">Live Preview</h3>
-
+    
                 <!-- FIFA Card with 3D tilt -->
                 <div class="flex justify-center mb-6">
                   <div class="card-tilt-container">
@@ -99,120 +101,129 @@ interface BatchProgress {
                       (mousemove)="onCardMouseMove($event)"
                       (mouseleave)="onCardMouseLeave($event)"
                       [style.transform]="cardTiltTransform"
-                    >
+                      >
                       <div
                         id="fifa-card-preview"
                         [class]="'fifa-card ' + currentPlayer.backgroundTheme"
-                      >
+                        >
                         <!-- Header with rating and position -->
                         <div class="card-header">
                           <div class="rating-badge">{{ currentPlayer.rating }}</div>
                           <div class="position-badge">{{ currentPlayer.position }}</div>
-                          <div *ngIf="currentPlayer.nationality"
-                               class="flag-logo"
-                               [title]="currentPlayer.nationality">
-                            {{ getFlagEmoji(currentPlayer.nationality) }}
-                          </div>
+                          @if (currentPlayer.nationality) {
+                            <div
+                              class="flag-logo"
+                              [title]="currentPlayer.nationality">
+                              {{ getFlagEmoji(currentPlayer.nationality) }}
+                            </div>
+                          }
                         </div>
-
+    
                         <!-- Player photo -->
                         <div class="player-photo-container">
-                          <img
-                            *ngIf="currentPlayer.profilePhoto"
-                            [src]="currentPlayer.profilePhoto"
-                            [class]="'player-photo ' + (selectedTemplate?.maskShape === 'circle' ? 'circle-mask' : '')"
-                            alt="Player Photo"
-                            (error)="onImageError($event)"
-                          >
-                          <div
-                            *ngIf="!currentPlayer.profilePhoto"
-                            class="photo-placeholder"
-                          >
-                            &#128100;
-                          </div>
+                          @if (currentPlayer.profilePhoto) {
+                            <img
+                              [src]="currentPlayer.profilePhoto"
+                              [class]="'player-photo ' + (selectedTemplate?.maskShape === 'circle' ? 'circle-mask' : '')"
+                              alt="Player Photo"
+                              (error)="onImageError($event)"
+                              >
+                          }
+                          @if (!currentPlayer.profilePhoto) {
+                            <div
+                              class="photo-placeholder"
+                              >
+                              &#128100;
+                            </div>
+                          }
                         </div>
-
+    
                         <!-- Player info -->
                         <div class="player-info">
                           <div class="player-name">{{ currentPlayer.name || 'Player Name' }}</div>
                           <div class="nationality-info">{{ currentPlayer.nationality || 'NAT' }}</div>
                         </div>
-
+    
                         <!-- Stats grid -->
                         <div class="stats-grid">
-                          <div *ngFor="let stat of statKeys" class="stat-item">
-                            <div class="stat-value">{{ currentPlayer.stats[stat] || 0 }}</div>
-                            <div class="stat-label">{{ getStatLabel(stat) }}</div>
-                          </div>
+                          @for (stat of statKeys; track stat) {
+                            <div class="stat-item">
+                              <div class="stat-value">{{ currentPlayer.stats[stat] || 0 }}</div>
+                              <div class="stat-label">{{ getStatLabel(stat) }}</div>
+                            </div>
+                          }
                         </div>
-
+    
                         <!-- Brand logo -->
-                        <div *ngIf="currentPlayer.customLogo" class="brand-logo">
-                          <img [src]="currentPlayer.customLogo" alt="Logo">
-                        </div>
+                        @if (currentPlayer.customLogo) {
+                          <div class="brand-logo">
+                            <img [src]="currentPlayer.customLogo" alt="Logo">
+                          </div>
+                        }
                       </div>
                     </div>
                   </div>
                 </div>
-
+    
                 <!-- Export buttons -->
                 <div class="grid grid-cols-2 gap-3">
                   <button
                     (click)="exportPNG('transparent')"
                     [disabled]="isExporting"
                     class="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg transition-colors text-sm font-medium"
-                  >
+                    >
                     PNG Export
                   </button>
                   <button
                     (click)="copyToClipboard()"
                     [disabled]="isExporting"
                     class="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg transition-colors text-sm font-medium"
-                  >
+                    >
                     Copy
                   </button>
                   <button
                     (click)="exportPDF()"
                     [disabled]="isExporting"
                     class="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition-colors text-sm font-medium"
-                  >
+                    >
                     PDF Sheet
                   </button>
                   <button
                     (click)="duplicateCard()"
                     class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors text-sm font-medium"
-                  >
+                    >
                     Duplicate
                   </button>
                 </div>
               </div>
             </div>
           </div>
-
+    
           <!-- Left Panel: Card Builder -->
           <div class="lg:col-span-1 order-2 lg:order-1">
             <div class="bg-slate-800 rounded-xl shadow-xl p-4 sm:p-6 space-y-6">
-
+    
               <!-- Template Selector -->
               <div>
                 <h3 class="text-lg font-semibold mb-3 text-yellow-400">Card Template</h3>
                 <div class="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-3 xl:grid-cols-5 gap-2">
-                  <button
-                    *ngFor="let template of availableTemplates"
-                    (click)="selectTemplate(template.id)"
+                  @for (template of availableTemplates; track template) {
+                    <button
+                      (click)="selectTemplate(template.id)"
                     [class]="'p-2 rounded-lg border-2 transition-all text-center ' +
                     (currentPlayer.backgroundTheme === template.name ?
                       'border-yellow-400 bg-yellow-400/10 shadow-glow-gold' :
                       'border-slate-600 hover:border-slate-500')"
-                  >
-                    <div class="text-xs font-medium truncate">{{ template.displayName }}</div>
-                  </button>
+                      >
+                      <div class="text-xs font-medium truncate">{{ template.displayName }}</div>
+                    </button>
+                  }
                 </div>
               </div>
-
+    
               <!-- Player Form -->
               <form [formGroup]="cardForm" class="space-y-4">
-
+    
                 <!-- Name -->
                 <div>
                   <label class="block text-sm font-medium mb-1">Player Name</label>
@@ -221,22 +232,24 @@ interface BatchProgress {
                     formControlName="name"
                     class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
                     placeholder="Enter player name"
-                  >
+                    >
                 </div>
-
+    
                 <!-- Position -->
                 <div>
                   <label class="block text-sm font-medium mb-1">IT Position</label>
                   <select
                     formControlName="position"
                     class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
-                  >
-                    <option *ngFor="let position of itPositions" [value]="position">
-                      {{ position }} - {{ getPositionName(position) }}
-                    </option>
+                    >
+                    @for (position of itPositions; track position) {
+                      <option [value]="position">
+                        {{ position }} - {{ getPositionName(position) }}
+                      </option>
+                    }
                   </select>
                 </div>
-
+    
                 <!-- Nationality -->
                 <div>
                   <label class="block text-sm font-medium mb-1">Nationality (ISO Code)</label>
@@ -246,9 +259,9 @@ interface BatchProgress {
                     class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
                     placeholder="FR, US, DE, etc."
                     maxlength="3"
-                  >
+                    >
                 </div>
-
+    
                 <!-- Overall Rating -->
                 <div>
                   <label class="block text-sm font-medium mb-1">
@@ -258,7 +271,7 @@ interface BatchProgress {
                       (click)="toggleManualRating()"
                       [class]="'ml-2 text-xs px-2 py-1 rounded ' +
                       (currentPlayer.manualRating ? 'bg-red-600 text-white' : 'bg-green-600 text-white')"
-                    >
+                      >
                       {{ currentPlayer.manualRating ? 'Manual' : 'Auto' }}
                     </button>
                   </label>
@@ -269,9 +282,9 @@ interface BatchProgress {
                     min="1"
                     max="99"
                     class="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer slider"
-                  >
+                    >
                 </div>
-
+    
                 <!-- Photo Upload -->
                 <div>
                   <label class="block text-sm font-medium mb-1">Profile Photo</label>
@@ -281,17 +294,20 @@ interface BatchProgress {
                     (drop)="onFileDrop($event)"
                     (dragover)="onDragOver($event)"
                     (dragleave)="onDragLeave($event)"
-                  >
+                    >
                     <div class="text-center">
-                      <div *ngIf="!currentPlayer.profilePhoto" class="text-slate-400">
-                        <div class="text-sm">Drag & drop or click to upload</div>
-                      </div>
-                      <img
-                        *ngIf="currentPlayer.profilePhoto"
-                        [src]="currentPlayer.profilePhoto"
-                        class="max-h-28 max-w-full object-cover rounded"
-                        alt="Preview"
-                      >
+                      @if (!currentPlayer.profilePhoto) {
+                        <div class="text-slate-400">
+                          <div class="text-sm">Drag & drop or click to upload</div>
+                        </div>
+                      }
+                      @if (currentPlayer.profilePhoto) {
+                        <img
+                          [src]="currentPlayer.profilePhoto"
+                          class="max-h-28 max-w-full object-cover rounded"
+                          alt="Preview"
+                          >
+                      }
                     </div>
                   </div>
                   <input
@@ -300,9 +316,9 @@ interface BatchProgress {
                     accept="image/*"
                     (change)="onImageUpload($event)"
                     class="hidden"
-                  >
+                    >
                 </div>
-
+    
                 <!-- Stats -->
                 <div>
                   <div class="flex items-center justify-between mb-3">
@@ -312,213 +328,229 @@ interface BatchProgress {
                         type="button"
                         (click)="randomizeStats()"
                         class="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-xs transition-colors"
-                      >
+                        >
                         Randomize
                       </button>
                       <button
                         type="button"
                         (click)="recomputeRating()"
                         class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs transition-colors"
-                      >
+                        >
                         Recompute
                       </button>
                       <button
                         type="button"
                         (click)="resetStats()"
                         class="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-xs transition-colors"
-                      >
+                        >
                         Reset
                       </button>
                     </div>
                   </div>
-
+    
                   <div class="space-y-3">
-                    <div *ngFor="let stat of statKeys" class="flex items-center gap-3">
-                      <div class="w-12 text-xs font-medium uppercase text-slate-400">{{ getStatLabel(stat) }}</div>
-                      <input
-                        type="range"
-                        [formControlName]="stat"
-                        min="1"
-                        max="99"
-                        class="flex-1 h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer slider"
-                      >
-                      <div class="w-8 text-xs font-bold text-right text-yellow-400">
-                        {{ cardForm.get(stat)?.value }}
+                    @for (stat of statKeys; track stat) {
+                      <div class="flex items-center gap-3">
+                        <div class="w-12 text-xs font-medium uppercase text-slate-400">{{ getStatLabel(stat) }}</div>
+                        <input
+                          type="range"
+                          [formControlName]="stat"
+                          min="1"
+                          max="99"
+                          class="flex-1 h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer slider"
+                          >
+                        <div class="w-8 text-xs font-bold text-right text-yellow-400">
+                          {{ cardForm.get(stat)?.value }}
+                        </div>
                       </div>
-                    </div>
+                    }
                   </div>
                 </div>
-
+    
               </form>
             </div>
           </div>
-
+    
           <!-- Right Panel: Batch & History -->
           <div class="lg:col-span-1 order-3">
             <div class="bg-slate-800 rounded-xl shadow-xl p-4 sm:p-6 space-y-6">
-
+    
               <!-- Tabs -->
               <div class="flex border-b border-slate-700">
                 <button
                   (click)="activeTab = 'single'"
                   [class]="'px-4 py-2 text-sm font-medium transition-colors ' +
                   (activeTab === 'single' ? 'border-b-2 border-yellow-400 text-yellow-400' : 'text-slate-400 hover:text-white')"
-                >
+                  >
                   Single Card
                 </button>
                 <button
                   (click)="activeTab = 'batch'"
                   [class]="'px-4 py-2 text-sm font-medium transition-colors ' +
                   (activeTab === 'batch' ? 'border-b-2 border-yellow-400 text-yellow-400' : 'text-slate-400 hover:text-white')"
-                >
+                  >
                   Batch Mode
                 </button>
                 <button
                   (click)="activeTab = 'history'"
                   [class]="'px-4 py-2 text-sm font-medium transition-colors ' +
                   (activeTab === 'history' ? 'border-b-2 border-yellow-400 text-yellow-400' : 'text-slate-400 hover:text-white')"
-                >
+                  >
                   History
                 </button>
               </div>
-
+    
               <!-- Single Card Tab -->
-              <div *ngIf="activeTab === 'single'" class="space-y-4">
-                <h4 class="font-medium">Export Options</h4>
-                <div class="space-y-2">
-                  <button
-                    (click)="exportPNG('transparent')"
-                    [disabled]="isExporting"
-                    class="w-full p-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg transition-colors text-left"
-                  >
-                    <div class="font-medium">Transparent PNG</div>
-                    <div class="text-xs text-slate-400">1024x1536 for printing</div>
-                  </button>
-                  <button
-                    (click)="exportPNG('web')"
-                    [disabled]="isExporting"
-                    class="w-full p-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg transition-colors text-left"
-                  >
-                    <div class="font-medium">Web PNG</div>
-                    <div class="text-xs text-slate-400">512x768 for web use</div>
-                  </button>
-                  <button
-                    (click)="exportPNG('social')"
-                    [disabled]="isExporting"
-                    class="w-full p-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg transition-colors text-left"
-                  >
-                    <div class="font-medium">Social Media</div>
-                    <div class="text-xs text-slate-400">1080x1080 square crop</div>
-                  </button>
-                </div>
-              </div>
-
-              <!-- Batch Mode Tab -->
-              <div *ngIf="activeTab === 'batch'" class="space-y-4">
-                <h4 class="font-medium">Import Data</h4>
-                <div class="space-y-3">
-                  <div class="file-input-wrapper w-full">
-                    <div class="w-full p-3 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors text-center cursor-pointer text-sm">
-                      Upload CSV or JSON file
-                    </div>
-                    <input
-                      type="file"
-                      accept=".csv,.json"
-                      (change)="onBatchImport($event)"
-                    >
-                  </div>
-                  <div class="file-input-wrapper w-full">
-                    <div class="w-full p-3 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors text-center cursor-pointer text-sm">
-                      Upload Photos ZIP (optional)
-                    </div>
-                    <input
-                      type="file"
-                      accept=".zip"
-                      (change)="onPhotoZipImport($event)"
-                    >
-                  </div>
-                </div>
-
-                <!-- Batch Progress -->
-                <div *ngIf="batchProgress.status !== 'idle'" class="space-y-2">
-                  <div class="text-xs text-slate-400">{{ batchProgress.message }}</div>
-                  <div *ngIf="batchProgress.total > 0" class="w-full bg-slate-700 rounded-full h-2">
-                    <div
-                      class="bg-yellow-400 h-2 rounded-full progress-bar-fill"
-                      [style.width.%]="batchProgress.total > 0 ? (batchProgress.current / batchProgress.total) * 100 : 0"
-                    ></div>
-                  </div>
-                </div>
-
-                <!-- Batch Cards List -->
-                <div *ngIf="batchCards.length > 0" class="space-y-2">
-                  <h4 class="font-medium text-sm">Imported Cards ({{ batchCards.length }})</h4>
-                  <div class="max-h-64 overflow-y-auto space-y-1">
-                    <div
-                      *ngFor="let card of batchCards"
-                      (click)="loadBatchCard(card)"
-                      class="p-2 bg-slate-700 hover:bg-slate-600 rounded cursor-pointer flex items-center justify-between transition-colors"
-                    >
-                      <div>
-                        <span class="text-sm font-medium">{{ card.name }}</span>
-                        <span class="text-xs text-slate-400 ml-2">{{ card.position }}</span>
-                      </div>
-                      <span class="text-xs text-yellow-400 font-bold">{{ card.rating }}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="text-xs text-slate-400">
-                  CSV columns: name, position, nationality, technical, leadership, creativity, reliability, collaboration, adaptability
-                </div>
-              </div>
-
-              <!-- History Tab -->
-              <div *ngIf="activeTab === 'history'" class="space-y-4">
-                <div class="flex items-center justify-between">
-                  <h4 class="font-medium">Recent Cards</h4>
-                  <button
-                    *ngIf="cardHistory.length > 0"
-                    (click)="clearHistory()"
-                    class="text-xs text-red-400 hover:text-red-300 transition-colors"
-                  >
-                    Clear All
-                  </button>
-                </div>
-
-                <div *ngIf="cardHistory.length === 0" class="text-sm text-slate-400">
-                  No cards in history yet. Export a card to save it here.
-                </div>
-
-                <div *ngIf="cardHistory.length > 0" class="max-h-96 overflow-y-auto space-y-2">
-                  <div
-                    *ngFor="let stored of cardHistory"
-                    class="p-3 bg-slate-700 rounded-lg flex items-center justify-between group transition-colors hover:bg-slate-600"
-                  >
-                    <div (click)="loadFromHistory(stored)" class="cursor-pointer flex-1">
-                      <div class="font-medium text-sm">{{ stored.playerData.name }}</div>
-                      <div class="text-xs text-slate-400">
-                        {{ stored.playerData.position }} &middot; {{ stored.playerData.rating }} OVR
-                      </div>
-                    </div>
+              @if (activeTab === 'single') {
+                <div class="space-y-4">
+                  <h4 class="font-medium">Export Options</h4>
+                  <div class="space-y-2">
                     <button
-                      (click)="removeFromHistory(stored.id)"
-                      class="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all text-lg px-2"
-                    >
-                      &times;
+                      (click)="exportPNG('transparent')"
+                      [disabled]="isExporting"
+                      class="w-full p-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg transition-colors text-left"
+                      >
+                      <div class="font-medium">Transparent PNG</div>
+                      <div class="text-xs text-slate-400">1024x1536 for printing</div>
+                    </button>
+                    <button
+                      (click)="exportPNG('web')"
+                      [disabled]="isExporting"
+                      class="w-full p-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg transition-colors text-left"
+                      >
+                      <div class="font-medium">Web PNG</div>
+                      <div class="text-xs text-slate-400">512x768 for web use</div>
+                    </button>
+                    <button
+                      (click)="exportPNG('social')"
+                      [disabled]="isExporting"
+                      class="w-full p-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg transition-colors text-left"
+                      >
+                      <div class="font-medium">Social Media</div>
+                      <div class="text-xs text-slate-400">1080x1080 square crop</div>
                     </button>
                   </div>
                 </div>
-              </div>
-
+              }
+    
+              <!-- Batch Mode Tab -->
+              @if (activeTab === 'batch') {
+                <div class="space-y-4">
+                  <h4 class="font-medium">Import Data</h4>
+                  <div class="space-y-3">
+                    <div class="file-input-wrapper w-full">
+                      <div class="w-full p-3 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors text-center cursor-pointer text-sm">
+                        Upload CSV or JSON file
+                      </div>
+                      <input
+                        type="file"
+                        accept=".csv,.json"
+                        (change)="onBatchImport($event)"
+                        >
+                    </div>
+                    <div class="file-input-wrapper w-full">
+                      <div class="w-full p-3 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors text-center cursor-pointer text-sm">
+                        Upload Photos ZIP (optional)
+                      </div>
+                      <input
+                        type="file"
+                        accept=".zip"
+                        (change)="onPhotoZipImport($event)"
+                        >
+                    </div>
+                  </div>
+                  <!-- Batch Progress -->
+                  @if (batchProgress.status !== 'idle') {
+                    <div class="space-y-2">
+                      <div class="text-xs text-slate-400">{{ batchProgress.message }}</div>
+                      @if (batchProgress.total > 0) {
+                        <div class="w-full bg-slate-700 rounded-full h-2">
+                          <div
+                            class="bg-yellow-400 h-2 rounded-full progress-bar-fill"
+                            [style.width.%]="batchProgress.total > 0 ? (batchProgress.current / batchProgress.total) * 100 : 0"
+                          ></div>
+                        </div>
+                      }
+                    </div>
+                  }
+                  <!-- Batch Cards List -->
+                  @if (batchCards.length > 0) {
+                    <div class="space-y-2">
+                      <h4 class="font-medium text-sm">Imported Cards ({{ batchCards.length }})</h4>
+                      <div class="max-h-64 overflow-y-auto space-y-1">
+                        @for (card of batchCards; track card) {
+                          <div
+                            (click)="loadBatchCard(card)"
+                            class="p-2 bg-slate-700 hover:bg-slate-600 rounded cursor-pointer flex items-center justify-between transition-colors"
+                            >
+                            <div>
+                              <span class="text-sm font-medium">{{ card.name }}</span>
+                              <span class="text-xs text-slate-400 ml-2">{{ card.position }}</span>
+                            </div>
+                            <span class="text-xs text-yellow-400 font-bold">{{ card.rating }}</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                  <div class="text-xs text-slate-400">
+                    CSV columns: name, position, nationality, technical, leadership, creativity, reliability, collaboration, adaptability
+                  </div>
+                </div>
+              }
+    
+              <!-- History Tab -->
+              @if (activeTab === 'history') {
+                <div class="space-y-4">
+                  <div class="flex items-center justify-between">
+                    <h4 class="font-medium">Recent Cards</h4>
+                    @if (cardHistory.length > 0) {
+                      <button
+                        (click)="clearHistory()"
+                        class="text-xs text-red-400 hover:text-red-300 transition-colors"
+                        >
+                        Clear All
+                      </button>
+                    }
+                  </div>
+                  @if (cardHistory.length === 0) {
+                    <div class="text-sm text-slate-400">
+                      No cards in history yet. Export a card to save it here.
+                    </div>
+                  }
+                  @if (cardHistory.length > 0) {
+                    <div class="max-h-96 overflow-y-auto space-y-2">
+                      @for (stored of cardHistory; track stored) {
+                        <div
+                          class="p-3 bg-slate-700 rounded-lg flex items-center justify-between group transition-colors hover:bg-slate-600"
+                          >
+                          <div (click)="loadFromHistory(stored)" class="cursor-pointer flex-1">
+                            <div class="font-medium text-sm">{{ stored.playerData.name }}</div>
+                            <div class="text-xs text-slate-400">
+                              {{ stored.playerData.position }} &middot; {{ stored.playerData.rating }} OVR
+                            </div>
+                          </div>
+                          <button
+                            (click)="removeFromHistory(stored.id)"
+                            class="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all text-lg px-2"
+                            >
+                            &times;
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+    
             </div>
           </div>
-
+    
         </div>
       </main>
-
+    
     </div>
-  `
+    `
 })
 export class AppComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
