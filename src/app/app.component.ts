@@ -949,7 +949,7 @@ export class AppComponent implements OnInit, OnDestroy {
         { playerData: this.currentPlayer, imageDataUrl: pngDataUrl }
       ]);
 
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
       this.exportService.downloadFile(blob, `${this.currentPlayer.name}_FIFA_Card_Sheet.pdf`);
       this.showToast('PDF exported successfully!', 'success');
     } catch (error) {
