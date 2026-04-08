@@ -1,0 +1,32 @@
+stages:
+  - build
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  GIT_DEPTH: "1"
+
+default:
+  interruptible: false
+  tags: [ci-docker]
+
+build:
+  stage: build
+  image: docker:29
+  variables:
+    DOCKER_HOST: unix:///var/run/docker.sock
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
+    - docker buildx create --name ci-builder --driver docker-container --use
+    - docker buildx inspect --bootstrap
+  script:
+    - |
+      docker buildx build --platform linux/amd64 \
+        --cache-from "type=registry,ref=${CI_REGISTRY_IMAGE}:cache" \
+        --cache-to "type=registry,ref=${CI_REGISTRY_IMAGE}:cache,mode=max" \
+        --tag "${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}" \
+        --tag "${CI_REGISTRY_IMAGE}:latest" \
+        --push .
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
