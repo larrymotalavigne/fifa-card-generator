@@ -5,7 +5,7 @@ import { Subject, takeUntil } from 'rxjs';
 import * as htmlToImage from 'html-to-image';
 import { CardService } from './services/card.service';
 import { ExportService } from './services/export.service';
-import { BatchService } from './services/batch.service';
+import { BatchService, CSVParseResult, FieldMapping, CardFieldKey } from './services/batch.service';
 import { StorageService } from './services/storage.service';
 import { PlayerData, PlayerStats, CardTemplate, ITPosition, CardTheme, StoredCard, STAT_LABELS, POSITION_NAMES } from './models/player.model';
 
@@ -43,7 +43,7 @@ interface BatchProgress {
         </div>
       }
     </div>
-    
+
     <!-- Export Loading Overlay -->
     @if (isExporting) {
       <div class="fixed inset-0 bg-black/60 z-40 flex items-center justify-center">
@@ -53,10 +53,241 @@ interface BatchProgress {
         </div>
       </div>
     }
-    
+
+    <!-- Batch Import Wizard Modal -->
+    @if (showBatchWizard) {
+      <div class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" (click)="closeBatchWizard()">
+        <div class="bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" (click)="$event.stopPropagation()">
+
+          <!-- Modal Header -->
+          <div class="flex items-center justify-between p-5 border-b border-slate-700">
+            <h2 class="text-lg font-bold text-yellow-400">Batch Import</h2>
+            <button (click)="closeBatchWizard()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+          </div>
+
+          <!-- Step Indicators -->
+          <div class="flex items-center gap-0 px-5 pt-4">
+            @for (step of wizardSteps; track step; let i = $index) {
+              <div class="flex items-center" [class.flex-1]="i < wizardSteps.length - 1">
+                <div [class]="'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ' +
+                  (wizardStep > i + 1 ? 'bg-green-600 text-white' :
+                   wizardStep === i + 1 ? 'bg-yellow-400 text-black' :
+                   'bg-slate-600 text-slate-400')">
+                  {{ wizardStep > i + 1 ? '&#10003;' : (i + 1) }}
+                </div>
+                <div class="text-xs ml-1.5 shrink-0" [class]="wizardStep === i + 1 ? 'text-yellow-400 font-medium' : 'text-slate-500'">{{ step }}</div>
+                @if (i < wizardSteps.length - 1) {
+                  <div class="flex-1 h-px bg-slate-600 mx-2"></div>
+                }
+              </div>
+            }
+          </div>
+
+          <!-- Step 1: File Upload -->
+          @if (wizardStep === 1) {
+            <div class="p-5 space-y-4">
+              <p class="text-sm text-slate-400">Upload a CSV or JSON file containing player data.</p>
+              <div
+                class="border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer"
+                [class]="wizardDragOver ? 'border-yellow-400 bg-yellow-400/5' : 'border-slate-600 hover:border-slate-500'"
+                (click)="wizardFileInput.click()"
+                (dragover)="onWizardDragOver($event)"
+                (dragleave)="onWizardDragLeave($event)"
+                (drop)="onWizardFileDrop($event)"
+                >
+                <div class="text-4xl mb-3">&#128196;</div>
+                <div class="font-medium mb-1">Drag &amp; drop or click to upload</div>
+                <div class="text-sm text-slate-400">CSV or JSON files supported</div>
+              </div>
+              <input
+                #wizardFileInput
+                type="file"
+                accept=".csv,.json"
+                class="hidden"
+                (change)="onWizardFileSelect($event)"
+                >
+              @if (wizardFileName) {
+                <div class="flex items-center gap-2 p-3 bg-slate-700 rounded-lg">
+                  <span class="text-green-400">&#10003;</span>
+                  <span class="text-sm">{{ wizardFileName }}</span>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Step 2: Field Mapping (CSV only) -->
+          @if (wizardStep === 2) {
+            <div class="p-5 space-y-4">
+              <p class="text-sm text-slate-400">Map each column from your CSV to the corresponding card field.</p>
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-slate-700">
+                      <th class="text-left py-2 pr-4 text-slate-400 font-medium">CSV Column</th>
+                      <th class="text-left py-2 pr-4 text-slate-400 font-medium">Sample Data</th>
+                      <th class="text-left py-2 text-slate-400 font-medium">Map To</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (header of csvParseResult?.headers; track header) {
+                      <tr class="border-b border-slate-700/50">
+                        <td class="py-2 pr-4 font-medium">{{ header }}</td>
+                        <td class="py-2 pr-4 text-slate-400 text-xs max-w-24 truncate">
+                          {{ getPreviewCellValue(header) }}
+                        </td>
+                        <td class="py-2">
+                          <select
+                            [ngModel]="fieldMapping[header]"
+                            (ngModelChange)="fieldMapping[header] = $event"
+                            class="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs focus:border-blue-500 focus:outline-none w-36"
+                            >
+                            <option value="skip">-- Skip --</option>
+                            <option value="name">Name</option>
+                            <option value="position">Position</option>
+                            <option value="nationality">Nationality</option>
+                            <option value="rating">Overall Rating</option>
+                            <option value="theme">Theme</option>
+                            <option value="technical">Technical</option>
+                            <option value="leadership">Leadership</option>
+                            <option value="creativity">Creativity</option>
+                            <option value="reliability">Reliability</option>
+                            <option value="collaboration">Collaboration</option>
+                            <option value="adaptability">Adaptability</option>
+                            <option value="photo">Photo URL</option>
+                          </select>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+              <!-- CSV Preview -->
+              @if (csvParseResult && csvParseResult.preview.length > 0) {
+                <div>
+                  <div class="text-xs text-slate-400 mb-2">Preview (first 3 rows):</div>
+                  <div class="overflow-x-auto bg-slate-900 rounded p-2 text-xs font-mono space-y-1">
+                    @for (row of csvParseResult.preview; track row; let i = $index) {
+                      <div class="text-slate-300">{{ formatPreviewRow(row) }}</div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Step 3: Preview & Confirm -->
+          @if (wizardStep === 3) {
+            <div class="p-5 space-y-4">
+              <div class="flex items-center justify-between">
+                <p class="text-sm text-slate-400">Review how your data will be imported.</p>
+                <span class="text-yellow-400 font-bold text-sm">{{ wizardPreviewCards.length }} player{{ wizardPreviewCards.length !== 1 ? 's' : '' }} ready</span>
+              </div>
+              <div class="space-y-2 max-h-64 overflow-y-auto">
+                @for (card of wizardPreviewCards.slice(0, 3); track card; let i = $index) {
+                  <div class="p-3 bg-slate-700 rounded-lg flex items-center gap-4">
+                    <div class="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-yellow-400 font-bold text-sm shrink-0">
+                      {{ card.rating }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="font-medium text-sm truncate">{{ card.name || '(no name)' }}</div>
+                      <div class="text-xs text-slate-400">{{ card.position }} &middot; {{ card.nationality }} &middot; {{ card.backgroundTheme }}</div>
+                    </div>
+                    <div class="text-xs text-slate-500 shrink-0">Row {{ i + 1 }}</div>
+                  </div>
+                }
+                @if (wizardPreviewCards.length > 3) {
+                  <div class="text-center text-xs text-slate-400 py-2">
+                    + {{ wizardPreviewCards.length - 3 }} more cards
+                  </div>
+                }
+              </div>
+              @if (wizardPreviewCards.length === 0) {
+                <div class="p-4 bg-red-900/30 border border-red-700 rounded-lg text-sm text-red-300">
+                  No valid cards could be parsed. Please go back and check your field mapping.
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Step 4: Done -->
+          @if (wizardStep === 4) {
+            <div class="p-5 flex flex-col items-center gap-4 py-8">
+              <div class="w-16 h-16 rounded-full bg-green-600 flex items-center justify-center text-3xl">&#10003;</div>
+              <div class="text-lg font-bold">Import Complete</div>
+              <div class="text-slate-400 text-sm text-center">
+                {{ wizardImportResult ? wizardImportResult.success.length : 0 }} card{{ (wizardImportResult ? wizardImportResult.success.length : 0) !== 1 ? 's' : '' }} imported successfully.
+                @if (wizardImportResult && wizardImportResult.errors.length > 0) {
+                  <span class="text-yellow-400"> {{ wizardImportResult.errors.length }} row{{ wizardImportResult.errors.length !== 1 ? 's' : '' }} had errors and were skipped.</span>
+                }
+              </div>
+            </div>
+          }
+
+          <!-- Modal Footer -->
+          <div class="flex items-center justify-between p-5 border-t border-slate-700">
+            <div>
+              @if (wizardStep > 1 && wizardStep < 4) {
+                <button
+                  (click)="wizardBack()"
+                  class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm transition-colors"
+                  >
+                  Back
+                </button>
+              }
+            </div>
+            <div class="flex gap-3">
+              @if (wizardStep < 4) {
+                <button
+                  (click)="closeBatchWizard()"
+                  class="px-4 py-2 text-slate-400 hover:text-white text-sm transition-colors"
+                  >
+                  Cancel
+                </button>
+              }
+              @if (wizardStep === 1) {
+                <button
+                  (click)="wizardNext()"
+                  [disabled]="!wizardFile"
+                  class="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed text-black font-medium rounded-lg text-sm transition-colors"
+                  >
+                  Next
+                </button>
+              }
+              @if (wizardStep === 2) {
+                <button
+                  (click)="wizardNext()"
+                  class="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-black font-medium rounded-lg text-sm transition-colors"
+                  >
+                  Preview
+                </button>
+              }
+              @if (wizardStep === 3) {
+                <button
+                  (click)="wizardImport()"
+                  [disabled]="wizardPreviewCards.length === 0"
+                  class="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg text-sm transition-colors"
+                  >
+                  Import {{ wizardPreviewCards.length }} Player{{ wizardPreviewCards.length !== 1 ? 's' : '' }}
+                </button>
+              }
+              @if (wizardStep === 4) {
+                <button
+                  (click)="closeBatchWizard()"
+                  class="px-4 py-2 bg-yellow-400 hover:bg-yellow-300 text-black font-medium rounded-lg text-sm transition-colors"
+                  >
+                  Close
+                </button>
+              }
+            </div>
+          </div>
+
+        </div>
+      </div>
+    }
+
     <!-- Main Layout -->
     <div class="min-h-screen bg-slate-900 text-white">
-    
+
       <!-- Header -->
       <header class="bg-slate-800 shadow-lg">
         <div class="max-w-7xl mx-auto px-4 py-4 sm:py-6">
@@ -81,17 +312,17 @@ interface BatchProgress {
           </div>
         </div>
       </header>
-    
+
       <!-- Main Content -->
       <main class="max-w-7xl mx-auto px-4 py-6 sm:py-8">
         <div class="grid lg:grid-cols-3 gap-6 lg:gap-8">
-    
+
           <!-- Center: Card Preview (first on mobile) -->
           <div class="lg:col-span-1 order-first lg:order-2">
             <div class="sticky top-8">
               <div class="bg-slate-800 rounded-xl shadow-xl p-4 sm:p-6">
                 <h3 class="text-lg font-semibold mb-4 text-center text-yellow-400">Live Preview</h3>
-    
+
                 <!-- FIFA Card with 3D tilt -->
                 <div class="flex justify-center mb-6">
                   <div class="card-tilt-container">
@@ -118,7 +349,7 @@ interface BatchProgress {
                             </div>
                           }
                         </div>
-    
+
                         <!-- Player photo -->
                         <div class="player-photo-container">
                           @if (currentPlayer.profilePhoto) {
@@ -137,13 +368,13 @@ interface BatchProgress {
                             </div>
                           }
                         </div>
-    
+
                         <!-- Player info -->
                         <div class="player-info">
                           <div class="player-name">{{ currentPlayer.name || 'Player Name' }}</div>
                           <div class="nationality-info">{{ currentPlayer.nationality || 'NAT' }}</div>
                         </div>
-    
+
                         <!-- Stats grid -->
                         <div class="stats-grid">
                           @for (stat of statKeys; track stat) {
@@ -153,7 +384,7 @@ interface BatchProgress {
                             </div>
                           }
                         </div>
-    
+
                         <!-- Brand logo -->
                         @if (currentPlayer.customLogo) {
                           <div class="brand-logo">
@@ -164,7 +395,7 @@ interface BatchProgress {
                     </div>
                   </div>
                 </div>
-    
+
                 <!-- Export buttons -->
                 <div class="grid grid-cols-2 gap-3">
                   <button
@@ -182,7 +413,7 @@ interface BatchProgress {
                     Copy
                   </button>
                   <button
-                    (click)="exportPDF()"
+                    (click)="exportContactSheet()"
                     [disabled]="isExporting"
                     class="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-lg transition-colors text-sm font-medium"
                     >
@@ -198,11 +429,11 @@ interface BatchProgress {
               </div>
             </div>
           </div>
-    
+
           <!-- Left Panel: Card Builder -->
           <div class="lg:col-span-1 order-2 lg:order-1">
             <div class="bg-slate-800 rounded-xl shadow-xl p-4 sm:p-6 space-y-6">
-    
+
               <!-- Template Selector -->
               <div>
                 <h3 class="text-lg font-semibold mb-3 text-yellow-400">Card Template</h3>
@@ -220,10 +451,10 @@ interface BatchProgress {
                   }
                 </div>
               </div>
-    
+
               <!-- Player Form -->
               <form [formGroup]="cardForm" class="space-y-4">
-    
+
                 <!-- Name -->
                 <div>
                   <label class="block text-sm font-medium mb-1">Player Name</label>
@@ -234,7 +465,7 @@ interface BatchProgress {
                     placeholder="Enter player name"
                     >
                 </div>
-    
+
                 <!-- Position -->
                 <div>
                   <label class="block text-sm font-medium mb-1">IT Position</label>
@@ -249,7 +480,7 @@ interface BatchProgress {
                     }
                   </select>
                 </div>
-    
+
                 <!-- Nationality -->
                 <div>
                   <label class="block text-sm font-medium mb-1">Nationality (ISO Code)</label>
@@ -261,7 +492,7 @@ interface BatchProgress {
                     maxlength="3"
                     >
                 </div>
-    
+
                 <!-- Overall Rating -->
                 <div>
                   <label class="block text-sm font-medium mb-1">
@@ -284,7 +515,7 @@ interface BatchProgress {
                     class="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer slider"
                     >
                 </div>
-    
+
                 <!-- Photo Upload -->
                 <div>
                   <label class="block text-sm font-medium mb-1">Profile Photo</label>
@@ -318,7 +549,7 @@ interface BatchProgress {
                     class="hidden"
                     >
                 </div>
-    
+
                 <!-- Stats -->
                 <div>
                   <div class="flex items-center justify-between mb-3">
@@ -347,7 +578,7 @@ interface BatchProgress {
                       </button>
                     </div>
                   </div>
-    
+
                   <div class="space-y-3">
                     @for (stat of statKeys; track stat) {
                       <div class="flex items-center gap-3">
@@ -366,15 +597,15 @@ interface BatchProgress {
                     }
                   </div>
                 </div>
-    
+
               </form>
             </div>
           </div>
-    
+
           <!-- Right Panel: Batch & History -->
           <div class="lg:col-span-1 order-3">
             <div class="bg-slate-800 rounded-xl shadow-xl p-4 sm:p-6 space-y-6">
-    
+
               <!-- Tabs -->
               <div class="flex border-b border-slate-700">
                 <button
@@ -399,7 +630,7 @@ interface BatchProgress {
                   History
                 </button>
               </div>
-    
+
               <!-- Single Card Tab -->
               @if (activeTab === 'single') {
                 <div class="space-y-4">
@@ -432,22 +663,29 @@ interface BatchProgress {
                   </div>
                 </div>
               }
-    
+
               <!-- Batch Mode Tab -->
               @if (activeTab === 'batch') {
                 <div class="space-y-4">
-                  <h4 class="font-medium">Import Data</h4>
-                  <div class="space-y-3">
-                    <div class="file-input-wrapper w-full">
-                      <div class="w-full p-3 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors text-center cursor-pointer text-sm">
-                        Upload CSV or JSON file
-                      </div>
-                      <input
-                        type="file"
-                        accept=".csv,.json"
-                        (change)="onBatchImport($event)"
+                  <div class="flex items-center justify-between">
+                    <h4 class="font-medium">Import Data</h4>
+                    @if (batchCards.length > 0) {
+                      <button
+                        (click)="exportBatchPDF()"
+                        [disabled]="isExporting"
+                        class="text-xs px-3 py-1 bg-red-700 hover:bg-red-600 disabled:opacity-50 rounded-lg transition-colors"
                         >
-                    </div>
+                        PDF Sheet
+                      </button>
+                    }
+                  </div>
+                  <div class="space-y-3">
+                    <button
+                      (click)="openBatchWizard()"
+                      class="w-full p-3 bg-yellow-400 hover:bg-yellow-300 text-black font-medium rounded-lg transition-colors text-sm text-center"
+                      >
+                      Batch Import (CSV / JSON)
+                    </button>
                     <div class="file-input-wrapper w-full">
                       <div class="w-full p-3 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors text-center cursor-pointer text-sm">
                         Upload Photos ZIP (optional)
@@ -494,24 +732,35 @@ interface BatchProgress {
                     </div>
                   }
                   <div class="text-xs text-slate-400">
-                    CSV columns: name, position, nationality, technical, leadership, creativity, reliability, collaboration, adaptability
+                    Use the wizard to import CSV or JSON with custom field mapping.
                   </div>
                 </div>
               }
-    
+
               <!-- History Tab -->
               @if (activeTab === 'history') {
                 <div class="space-y-4">
                   <div class="flex items-center justify-between">
                     <h4 class="font-medium">Recent Cards</h4>
-                    @if (cardHistory.length > 0) {
-                      <button
-                        (click)="clearHistory()"
-                        class="text-xs text-red-400 hover:text-red-300 transition-colors"
-                        >
-                        Clear All
-                      </button>
-                    }
+                    <div class="flex items-center gap-2">
+                      @if (cardHistory.length > 1) {
+                        <button
+                          (click)="exportContactSheet()"
+                          [disabled]="isExporting"
+                          class="text-xs px-3 py-1 bg-red-700 hover:bg-red-600 disabled:opacity-50 rounded-lg transition-colors"
+                          >
+                          PDF Sheet
+                        </button>
+                      }
+                      @if (cardHistory.length > 0) {
+                        <button
+                          (click)="clearHistory()"
+                          class="text-xs text-red-400 hover:text-red-300 transition-colors"
+                          >
+                          Clear All
+                        </button>
+                      }
+                    </div>
                   </div>
                   @if (cardHistory.length === 0) {
                     <div class="text-sm text-slate-400">
@@ -542,13 +791,13 @@ interface BatchProgress {
                   }
                 </div>
               }
-    
+
             </div>
           </div>
-    
+
         </div>
       </main>
-    
+
     </div>
     `
 })
@@ -585,6 +834,18 @@ export class AppComponent implements OnInit, OnDestroy {
   itPositions: ITPosition[] = ['DEV', 'OPS', 'DATA', 'PM', 'QA', 'UX', 'SEC', 'ARCH'];
   statKeys: (keyof PlayerStats)[] = ['technical', 'leadership', 'creativity', 'reliability', 'collaboration', 'adaptability'];
 
+  // Batch Import Wizard state
+  showBatchWizard = false;
+  wizardStep = 1;
+  wizardSteps = ['Upload', 'Map Fields', 'Preview', 'Done'];
+  wizardFile: File | null = null;
+  wizardFileName = '';
+  wizardDragOver = false;
+  csvParseResult: CSVParseResult | null = null;
+  fieldMapping: FieldMapping = {};
+  wizardPreviewCards: PlayerData[] = [];
+  wizardImportResult: { success: PlayerData[]; errors: any[]; warnings: any[] } | null = null;
+
   constructor(
     private fb: FormBuilder,
     private cardService: CardService,
@@ -596,7 +857,6 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    // Subscribe to card service data
     this.cardService.currentPlayer$
       .pipe(takeUntil(this.destroy$))
       .subscribe(player => {
@@ -611,14 +871,12 @@ export class AppComponent implements OnInit, OnDestroy {
         this.selectedTemplate = templates.find(t => t.id === this.currentPlayer.backgroundTheme) || templates[0];
       });
 
-    // Subscribe to history
     this.storageService.history$
       .pipe(takeUntil(this.destroy$))
       .subscribe(history => {
         this.cardHistory = history;
       });
 
-    // Subscribe to batch data
     this.batchService.batchProgress$
       .pipe(takeUntil(this.destroy$))
       .subscribe(progress => {
@@ -673,7 +931,6 @@ export class AppComponent implements OnInit, OnDestroy {
       adaptability: [75, [Validators.min(1), Validators.max(99)]]
     });
 
-    // Subscribe to form changes
     this.cardForm.valueChanges
       .pipe(takeUntil(this.destroy$))
       .subscribe(formValues => {
@@ -719,7 +976,6 @@ export class AppComponent implements OnInit, OnDestroy {
       this.selectedTemplate = template;
       this.cardService.updatePlayer({ backgroundTheme: template.name as CardTheme });
 
-      // Trigger entrance animation
       this.cardAnimating = false;
       requestAnimationFrame(() => {
         this.cardAnimating = true;
@@ -891,7 +1147,6 @@ export class AppComponent implements OnInit, OnDestroy {
     this.isExporting = true;
     this.exportingType = 'Generating PNG';
 
-    // Wait a tick for tilt reset to apply
     await new Promise(r => setTimeout(r, 50));
 
     try {
@@ -899,7 +1154,6 @@ export class AppComponent implements OnInit, OnDestroy {
       this.downloadImage(dataUrl, `${this.currentPlayer.name}_FIFA_Card_${size}.png`);
       this.showToast('PNG exported successfully!', 'success');
 
-      // Auto-save to history
       await this.storageService.saveCardToHistory(this.currentPlayer, cardElement);
     } catch (error) {
       console.error('Error generating PNG:', error);
@@ -930,30 +1184,105 @@ export class AppComponent implements OnInit, OnDestroy {
     }
   }
 
-  async exportPDF() {
+  async exportContactSheet() {
     const cardElement = document.getElementById('fifa-card-preview');
     if (!cardElement) return;
 
     this.resetTiltBeforeExport();
     this.isExporting = true;
-    this.exportingType = 'Generating PDF';
+    this.exportingType = 'Generating PDF Contact Sheet';
 
     await new Promise(r => setTimeout(r, 50));
 
     try {
-      // Generate the current card as PNG first
-      const pngDataUrl = await this.exportService.exportCardAsPNG(cardElement, this.currentPlayer, 'transparent');
+      const savedPlayer = { ...this.currentPlayer };
+      const cardsToRender: PlayerData[] = [];
 
-      // Generate PDF contact sheet with the current card
-      const pdfBytes = await this.exportService.generatePDFContactSheet([
-        { playerData: this.currentPlayer, imageDataUrl: pngDataUrl }
-      ]);
+      if (this.cardHistory.length > 0) {
+        for (const stored of this.cardHistory) {
+          cardsToRender.push(stored.playerData);
+        }
+      } else {
+        cardsToRender.push(savedPlayer);
+      }
 
+      const renderedCards: { playerData: PlayerData; imageDataUrl: string }[] = [];
+
+      for (const playerData of cardsToRender) {
+        this.cardService.updatePlayer(playerData);
+        await new Promise(r => setTimeout(r, 120));
+
+        try {
+          const pngDataUrl = await this.exportService.exportCardAsPNG(cardElement, playerData, 'transparent');
+          renderedCards.push({ playerData, imageDataUrl: pngDataUrl });
+        } catch (err) {
+          console.warn(`Failed to render card for ${playerData.name}:`, err);
+        }
+      }
+
+      this.cardService.updatePlayer(savedPlayer);
+      await new Promise(r => setTimeout(r, 50));
+
+      if (renderedCards.length === 0) {
+        this.showToast('No cards to export.', 'warning');
+        return;
+      }
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const pdfBytes = await this.exportService.generatePDFContactSheet(renderedCards);
       const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
-      this.exportService.downloadFile(blob, `${this.currentPlayer.name}_FIFA_Card_Sheet.pdf`);
-      this.showToast('PDF exported successfully!', 'success');
+      this.exportService.downloadFile(blob, `team-cards-${dateStr}.pdf`);
+      this.showToast(`PDF contact sheet exported (${renderedCards.length} card${renderedCards.length !== 1 ? 's' : ''})!`, 'success');
     } catch (error) {
-      console.error('Error generating PDF:', error);
+      console.error('Error generating PDF contact sheet:', error);
+      this.showToast('Error generating PDF. Please try again.', 'error');
+    } finally {
+      this.isExporting = false;
+      this.exportingType = '';
+    }
+  }
+
+  async exportBatchPDF() {
+    const cardElement = document.getElementById('fifa-card-preview');
+    if (!cardElement || this.batchCards.length === 0) return;
+
+    this.resetTiltBeforeExport();
+    this.isExporting = true;
+    this.exportingType = 'Generating Batch PDF';
+
+    await new Promise(r => setTimeout(r, 50));
+
+    try {
+      const savedPlayer = { ...this.currentPlayer };
+      const renderedCards: { playerData: PlayerData; imageDataUrl: string }[] = [];
+
+      for (const playerData of this.batchCards) {
+        this.cardService.updatePlayer(playerData);
+        await new Promise(r => setTimeout(r, 120));
+
+        try {
+          const pngDataUrl = await this.exportService.exportCardAsPNG(cardElement, playerData, 'transparent');
+          renderedCards.push({ playerData, imageDataUrl: pngDataUrl });
+        } catch (err) {
+          console.warn(`Failed to render card for ${playerData.name}:`, err);
+        }
+      }
+
+      this.cardService.updatePlayer(savedPlayer);
+      await new Promise(r => setTimeout(r, 50));
+
+      if (renderedCards.length === 0) {
+        this.showToast('No cards could be rendered.', 'warning');
+        return;
+      }
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const pdfBytes = await this.exportService.generatePDFContactSheet(renderedCards);
+      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], { type: 'application/pdf' });
+      this.exportService.downloadFile(blob, `team-cards-${dateStr}.pdf`);
+      this.showToast(`PDF contact sheet exported (${renderedCards.length} cards)!`, 'success');
+    } catch (error) {
+      console.error('Error generating batch PDF:', error);
       this.showToast('Error generating PDF. Please try again.', 'error');
     } finally {
       this.isExporting = false;
@@ -973,7 +1302,188 @@ export class AppComponent implements OnInit, OnDestroy {
     this.showToast('Card duplicated', 'info');
   }
 
-  // ===== Batch operations =====
+  // ===== Batch Import Wizard =====
+  openBatchWizard() {
+    this.showBatchWizard = true;
+    this.wizardStep = 1;
+    this.wizardFile = null;
+    this.wizardFileName = '';
+    this.wizardDragOver = false;
+    this.csvParseResult = null;
+    this.fieldMapping = {};
+    this.wizardPreviewCards = [];
+    this.wizardImportResult = null;
+  }
+
+  closeBatchWizard() {
+    this.showBatchWizard = false;
+  }
+
+  onWizardDragOver(event: DragEvent) {
+    event.preventDefault();
+    this.wizardDragOver = true;
+  }
+
+  onWizardDragLeave(event: DragEvent) {
+    event.preventDefault();
+    this.wizardDragOver = false;
+  }
+
+  onWizardFileDrop(event: DragEvent) {
+    event.preventDefault();
+    this.wizardDragOver = false;
+    const file = event.dataTransfer?.files?.[0];
+    if (file) {
+      this.setWizardFile(file);
+    }
+  }
+
+  onWizardFileSelect(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) {
+      this.setWizardFile(file);
+    }
+    input.value = '';
+  }
+
+  private setWizardFile(file: File) {
+    if (!file.name.endsWith('.csv') && !file.name.endsWith('.json')) {
+      this.showToast('Please select a CSV or JSON file.', 'error');
+      return;
+    }
+    this.wizardFile = file;
+    this.wizardFileName = file.name;
+  }
+
+  async wizardNext() {
+    if (this.wizardStep === 1) {
+      if (!this.wizardFile) return;
+
+      if (this.wizardFile.name.endsWith('.json')) {
+        try {
+          const result = await this.batchService.importFromJSON(this.wizardFile);
+          this.wizardImportResult = result;
+          this.wizardPreviewCards = result.success;
+          this.wizardStep = 3;
+        } catch (error) {
+          this.showToast('Failed to parse JSON file.', 'error');
+        }
+      } else {
+        try {
+          this.csvParseResult = await this.batchService.parseCSVForMapping(this.wizardFile);
+          this.fieldMapping = this.batchService.autoDetectMapping(this.csvParseResult.headers);
+          this.wizardStep = 2;
+        } catch (error) {
+          this.showToast('Failed to parse CSV file.', 'error');
+        }
+      }
+    } else if (this.wizardStep === 2) {
+      if (!this.csvParseResult) return;
+      const preview = this.buildPreviewFromMapping(this.csvParseResult.rows);
+      this.wizardPreviewCards = preview;
+      this.wizardStep = 3;
+    }
+  }
+
+  wizardBack() {
+    if (this.wizardStep === 3 && this.wizardFile?.name.endsWith('.json')) {
+      this.wizardStep = 1;
+    } else if (this.wizardStep > 1) {
+      this.wizardStep--;
+    }
+  }
+
+  async wizardImport() {
+    if (!this.csvParseResult && this.wizardFile?.name.endsWith('.json')) {
+      this.wizardStep = 4;
+      this.showToast(`${this.wizardPreviewCards.length} cards imported!`, 'success');
+      this.activeTab = 'batch';
+      return;
+    }
+
+    if (this.csvParseResult) {
+      try {
+        const result = await this.batchService.importFromCSVWithMapping(
+          this.csvParseResult.rows,
+          this.csvParseResult.headers,
+          this.fieldMapping
+        );
+        this.wizardImportResult = result;
+        this.wizardStep = 4;
+        this.showToast(`${result.success.length} cards imported!`, 'success');
+        this.activeTab = 'batch';
+      } catch (error) {
+        this.showToast('Import failed. Please check your data.', 'error');
+      }
+    }
+  }
+
+  private buildPreviewFromMapping(rows: string[][]): PlayerData[] {
+    if (!this.csvParseResult) return [];
+
+    const headers = this.csvParseResult.headers;
+    const preview: PlayerData[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const values = rows[i];
+      const getValue = (field: CardFieldKey): string => {
+        const col = headers.find(h => this.fieldMapping[h] === field);
+        if (!col) return '';
+        const idx = headers.indexOf(col);
+        return idx >= 0 ? values[idx]?.trim() || '' : '';
+      };
+
+      const getNumericValue = (field: CardFieldKey, def: number): number => {
+        const v = getValue(field);
+        const p = parseInt(v, 10);
+        return !isNaN(p) ? Math.max(1, Math.min(99, p)) : def;
+      };
+
+      const stats: PlayerStats = {
+        technical: getNumericValue('technical', 75),
+        leadership: getNumericValue('leadership', 75),
+        creativity: getNumericValue('creativity', 75),
+        reliability: getNumericValue('reliability', 75),
+        collaboration: getNumericValue('collaboration', 75),
+        adaptability: getNumericValue('adaptability', 75)
+      };
+
+      const ratingRaw = getValue('rating');
+      const name = getValue('name');
+      if (!name) continue;
+
+      const validPositions: ITPosition[] = ['DEV', 'OPS', 'DATA', 'PM', 'QA', 'UX', 'SEC', 'ARCH'];
+      const pos = getValue('position').toUpperCase() as ITPosition;
+
+      preview.push({
+        id: `preview_${i}`,
+        name: name.substring(0, 30),
+        position: validPositions.includes(pos) ? pos : 'DEV',
+        nationality: getValue('nationality').toUpperCase().substring(0, 3) || 'INT',
+        rating: ratingRaw ? Math.max(1, Math.min(99, parseInt(ratingRaw, 10))) || this.cardService.calculateOverallRating(stats) : this.cardService.calculateOverallRating(stats),
+        manualRating: ratingRaw !== '',
+        stats,
+        backgroundTheme: 'gold-classic',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+    }
+
+    return preview;
+  }
+
+  formatPreviewRow(row: string[]): string {
+    return row.map(v => v || '(empty)').join(' | ');
+  }
+
+  getPreviewCellValue(header: string): string {
+    if (!this.csvParseResult) return '';
+    const idx = this.csvParseResult.headers.indexOf(header);
+    return idx >= 0 ? (this.csvParseResult.preview[0]?.[idx] || '') : '';
+  }
+
+  // ===== Legacy batch operations =====
   async onBatchImport(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -1004,7 +1514,6 @@ export class AppComponent implements OnInit, OnDestroy {
       this.showToast('Error importing file. Check format and try again.', 'error');
     }
 
-    // Reset file input
     input.value = '';
   }
 
@@ -1017,7 +1526,6 @@ export class AppComponent implements OnInit, OnDestroy {
       const photos = await this.batchService.importPhotoLibrary(file);
       this.showToast(`Loaded ${photos.size} photos`, 'success');
 
-      // Auto-match photos to batch cards if any
       if (this.batchCards.length > 0) {
         this.batchService.matchPhotosToPlayers();
         this.showToast('Photos matched to players', 'info');
@@ -1072,7 +1580,6 @@ export class AppComponent implements OnInit, OnDestroy {
   getFlagEmoji(countryCode: string): string {
     if (!countryCode || countryCode.length < 2) return '';
     const code = countryCode.toUpperCase();
-    // Convert country code to regional indicator symbols
     const offset = 127397;
     const chars = [...code].map(c => String.fromCodePoint(c.charCodeAt(0) + offset));
     return chars.join('');

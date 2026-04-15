@@ -17,6 +17,31 @@ interface BatchProgress {
   message: string;
 }
 
+export interface CSVParseResult {
+  headers: string[];
+  rows: string[][];
+  preview: string[][];
+}
+
+export type CardFieldKey =
+  | 'name'
+  | 'position'
+  | 'nationality'
+  | 'rating'
+  | 'theme'
+  | 'technical'
+  | 'leadership'
+  | 'creativity'
+  | 'reliability'
+  | 'collaboration'
+  | 'adaptability'
+  | 'photo'
+  | 'skip';
+
+export interface FieldMapping {
+  [csvColumn: string]: CardFieldKey;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -37,6 +62,166 @@ export class BatchService {
 
   constructor(private cardService: CardService) {}
 
+  // Parse CSV file without importing — returns headers + preview rows for the mapping wizard
+  async parseCSVForMapping(file: File): Promise<CSVParseResult> {
+    const text = await file.text();
+    const lines = text.split('\n').filter(line => line.trim());
+
+    if (lines.length === 0) {
+      throw new Error('Empty CSV file');
+    }
+
+    const headers = this.parseCSVLine(lines[0]).map(h => h.trim());
+    const allRows: string[][] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = this.parseCSVLine(lines[i]);
+      if (values.some(v => v.trim())) {
+        allRows.push(values);
+      }
+    }
+
+    return {
+      headers,
+      rows: allRows,
+      preview: allRows.slice(0, 3)
+    };
+  }
+
+  // Build auto-detected field mapping based on column names
+  autoDetectMapping(headers: string[]): FieldMapping {
+    const mapping: FieldMapping = {};
+    const knownMappings: Record<string, CardFieldKey> = {
+      name: 'name',
+      player: 'name',
+      fullname: 'name',
+      'full name': 'name',
+      position: 'position',
+      pos: 'position',
+      role: 'position',
+      nationality: 'nationality',
+      country: 'nationality',
+      nat: 'nationality',
+      nation: 'nationality',
+      rating: 'rating',
+      overall: 'rating',
+      ovr: 'rating',
+      theme: 'theme',
+      template: 'theme',
+      technical: 'technical',
+      tech: 'technical',
+      leadership: 'leadership',
+      lead: 'leadership',
+      creativity: 'creativity',
+      creative: 'creativity',
+      cre: 'creativity',
+      reliability: 'reliability',
+      reliable: 'reliability',
+      rel: 'reliability',
+      collaboration: 'collaboration',
+      collab: 'collaboration',
+      col: 'collaboration',
+      adaptability: 'adaptability',
+      adapt: 'adaptability',
+      ada: 'adaptability',
+      photo: 'photo',
+      image: 'photo',
+      photo_url: 'photo',
+      photourl: 'photo',
+    };
+
+    for (const header of headers) {
+      const normalized = header.toLowerCase().trim().replace(/[\s_-]+/g, '');
+      const match = knownMappings[normalized] || knownMappings[header.toLowerCase().trim()];
+      mapping[header] = match || 'skip';
+    }
+
+    return mapping;
+  }
+
+  // Import CSV rows using a user-defined field mapping
+  async importFromCSVWithMapping(
+    rows: string[][],
+    headers: string[],
+    mapping: FieldMapping
+  ): Promise<BatchImportResult> {
+    this.updateProgress(0, rows.length, 'processing', 'Importing cards...');
+
+    const result: BatchImportResult = {
+      success: [],
+      errors: [],
+      warnings: []
+    };
+
+    for (let i = 0; i < rows.length; i++) {
+      this.updateProgress(i + 1, rows.length, 'processing', `Processing row ${i + 1}...`);
+
+      try {
+        const values = rows[i];
+        const getValue = (field: CardFieldKey): string => {
+          const col = headers.find(h => mapping[h] === field);
+          if (!col) return '';
+          const idx = headers.indexOf(col);
+          return idx >= 0 ? values[idx]?.trim() || '' : '';
+        };
+
+        const getNumericValue = (field: CardFieldKey, defaultValue: number): number => {
+          const v = getValue(field);
+          const parsed = parseInt(v, 10);
+          return !isNaN(parsed) ? Math.max(1, Math.min(99, parsed)) : defaultValue;
+        };
+
+        const stats: PlayerStats = {
+          technical: getNumericValue('technical', 75),
+          leadership: getNumericValue('leadership', 75),
+          creativity: getNumericValue('creativity', 75),
+          reliability: getNumericValue('reliability', 75),
+          collaboration: getNumericValue('collaboration', 75),
+          adaptability: getNumericValue('adaptability', 75)
+        };
+
+        const ratingRaw = getValue('rating');
+        const playerData: PlayerData = {
+          id: `batch_mapped_${i}_${Date.now()}`,
+          name: this.cardService.sanitizeInput(getValue('name'), 30),
+          position: this.validatePosition(getValue('position')),
+          nationality: getValue('nationality').toUpperCase().substring(0, 3),
+          rating: ratingRaw ? Math.max(1, Math.min(99, parseInt(ratingRaw, 10))) || this.cardService.calculateOverallRating(stats) : this.cardService.calculateOverallRating(stats),
+          manualRating: ratingRaw !== '',
+          stats,
+          backgroundTheme: this.validateTheme(getValue('theme')),
+          profilePhoto: getValue('photo') || undefined,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        const validation = this.validatePlayerData(playerData);
+        if (!validation.isValid) {
+          result.errors.push({ row: i + 1, message: validation.errors.join(', '), data: values });
+          continue;
+        }
+        if (validation.warnings.length > 0) {
+          result.warnings.push({ row: i + 1, message: validation.warnings.join(', '), data: playerData });
+        }
+
+        result.success.push(playerData);
+      } catch (error) {
+        result.errors.push({
+          row: i + 1,
+          message: error instanceof Error ? error.message : 'Unknown error',
+          data: rows[i]
+        });
+      }
+    }
+
+    const existing = this.batchCardsSubject.value;
+    this.batchCardsSubject.next([...existing, ...result.success]);
+    this.updateProgress(result.success.length, result.success.length, 'completed',
+      `Imported ${result.success.length} cards successfully`);
+
+    return result;
+  }
+
   // CSV Import
   async importFromCSV(file: File): Promise<BatchImportResult> {
     this.updateProgress(0, 0, 'processing', 'Reading CSV file...');
@@ -44,7 +229,7 @@ export class BatchService {
     try {
       const text = await file.text();
       const lines = text.split('\n').filter(line => line.trim());
-      
+
       if (lines.length === 0) {
         throw new Error('Empty CSV file');
       }
@@ -53,7 +238,7 @@ export class BatchService {
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
       const requiredFields = ['name', 'position', 'nationality'];
       const statFields = ['technical', 'leadership', 'creativity', 'reliability', 'collaboration', 'adaptability'];
-      
+
       // Validate headers
       const missingRequired = requiredFields.filter(field => !headers.includes(field));
       if (missingRequired.length > 0) {
@@ -69,13 +254,13 @@ export class BatchService {
       // Process data rows
       for (let i = 1; i < lines.length; i++) {
         this.updateProgress(i, lines.length - 1, 'processing', `Processing row ${i}...`);
-        
+
         try {
           const values = this.parseCSVLine(lines[i]);
           if (values.length === 0) continue; // Skip empty lines
 
           const playerData = this.parsePlayerDataFromCSV(headers, values, i);
-          
+
           // Validate the player data
           const validation = this.validatePlayerData(playerData);
           if (!validation.isValid) {
@@ -108,7 +293,7 @@ export class BatchService {
 
       // Update batch cards
       this.batchCardsSubject.next(result.success);
-      this.updateProgress(result.success.length, result.success.length, 'completed', 
+      this.updateProgress(result.success.length, result.success.length, 'completed',
         `Imported ${result.success.length} cards successfully`);
 
       return result;
@@ -127,7 +312,7 @@ export class BatchService {
       const jsonData = JSON.parse(text);
 
       let playersArray: any[];
-      
+
       // Handle different JSON structures
       if (Array.isArray(jsonData)) {
         playersArray = jsonData;
@@ -151,7 +336,7 @@ export class BatchService {
 
         try {
           const playerData = this.parsePlayerDataFromJSON(playersArray[i], i);
-          
+
           const validation = this.validatePlayerData(playerData);
           if (!validation.isValid) {
             result.errors.push({
@@ -200,7 +385,7 @@ export class BatchService {
       const zipContent = await zip.loadAsync(file);
       const photoMap = new Map<string, string>();
 
-      const imageFiles = Object.keys(zipContent.files).filter(filename => 
+      const imageFiles = Object.keys(zipContent.files).filter(filename =>
         /\.(jpg|jpeg|png|gif|webp)$/i.test(filename) && !zipContent.files[filename].dir
       );
 
@@ -209,11 +394,11 @@ export class BatchService {
 
         const filename = imageFiles[i];
         const file = zipContent.files[filename];
-        
+
         try {
           const blob = await file.async('blob');
           const base64 = await this.blobToBase64(blob);
-          
+
           // Use filename without extension as key
           const key = filename.replace(/\.[^/.]+$/, '').toLowerCase();
           photoMap.set(key, base64);
@@ -290,14 +475,14 @@ export class BatchService {
   }
 
   // Private helper methods
-  private parseCSVLine(line: string): string[] {
+  parseCSVLine(line: string): string[] {
     const result: string[] = [];
     let current = '';
     let inQuotes = false;
 
     for (let i = 0; i < line.length; i++) {
       const char = line[i];
-      
+
       if (char === '"') {
         inQuotes = !inQuotes;
       } else if (char === ',' && !inQuotes) {
@@ -307,7 +492,7 @@ export class BatchService {
         current += char;
       }
     }
-    
+
     result.push(current.trim());
     return result;
   }
