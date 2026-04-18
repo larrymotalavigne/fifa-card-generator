@@ -54,6 +54,16 @@ Card preview is a styled `<div>` with CSS classes from `src/styles.scss`. The `.
 
 Form changes -> `cardForm.valueChanges` -> `CardService.updatePlayer()` -> `currentPlayerSubject.next()` -> component subscription updates `currentPlayer` -> template re-renders card preview. The `takeUntil(destroy$)` pattern is used for subscription cleanup.
 
+## Deployment
+
+- Deployed via GitLab CI (`.gitlab-ci.yml`) — frontend-only pipeline archetype:
+  `test → build → deploy → verify`
+- Image: `CI_REGISTRY_IMAGE/fifa-card-generator-web:<SHA>` pushed to GitLab Container Registry
+- Deploy: `kubectl rollout restart deployment/fifa-card-generator-web -n apps`
+- Production URL: https://fifa-card-generator.atomstudios.fr
+
+**Canonical reference:** see `process/ci/frontend-only.yml` in the infra repo.
+
 ## Incomplete features (TODO stubs in app.component.ts)
 
 - PDF export (`exportPDF()`)
