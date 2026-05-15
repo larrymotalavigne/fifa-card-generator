@@ -1,100 +1,33 @@
+# Pipeline definition for fifa-card-generator (frontend-only Angular SPA).
+# Canonical template at atomstudios/ci-template/pipelines/frontend-only.yml.
+
 include:
   - project: 'atomstudios/ci-template'
     ref: main
-    file: '/templates/common.yml'
-  - project: 'atomstudios/ci-template'
-    ref: main
-    file: '/templates/security.yml'
-
-stages:
-  - test
-  - build
-  - deploy
-  - verify
+    file: '/pipelines/frontend-only.yml'
 
 variables:
-  DOCKER_DRIVER: overlay2
-  DOCKER_TLS_CERTDIR: ""
-  GIT_DEPTH: "1"
+  APP_NAME: fifa-card-generator
+  APP_DEPLOYMENT: fifa-card-generator-web
+  APP_FRONTEND_URL: https://fifa-card-generator.atomstudios.fr
+  # fifa-card-generator pushes to ${CI_REGISTRY_IMAGE} directly with no
+  # /suffix sub-repo.
+  APP_IMAGE_NO_SUFFIX: "true"
+  APP_NPM_DIR: "."
+  # fifa-card-generator uses `npm run build:prod` as its test gate (no
+  # prettier config in the repo).
+  APP_TEST_GATE: "build"
 
-default:
-  interruptible: false
-  tags: [k3s]
-
-# fifa-card-generator has package-lock.json at repo root (not front/)
-.npm_cache:
-  cache:
-    key:
-      files:
-        - package-lock.json
-    paths:
-      - .npm/
-    policy: pull-push
-
-# ─── Test ──────────────────────────────────────────────────────────────────────
-
-build-frontend-check:
-  stage: test
-  image: registry.gitlab.ggcorp.fr/internal/docker-cache/node:24-alpine
-  interruptible: true
-  extends: .npm_cache
-  variables:
-    npm_config_cache: "$CI_PROJECT_DIR/.npm"
-  before_script:
-    - npm config set legacy-peer-deps true
-    - npm ci
-  script:
-    - npm run build:prod
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: never
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "push"'
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-
-# ─── Build ─────────────────────────────────────────────────────────────────────
+# Re-name the lint-frontend job to build-frontend-check, matching the
+# semantic of `npm run build:prod`. The hidden template is the same.
+build-frontend-check: { extends: .lint_frontend }
 
 build:
-  extends: .docker_build
+  extends: .build_web
   needs: [build-frontend-check]
-  script:
-    - |
-      docker buildx build --platform linux/amd64 \
-        --tag "${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHORT_SHA}" \
-        --tag "${CI_REGISTRY_IMAGE}:latest" \
-        --push .
+  variables:
+    DOCKERFILE: Dockerfile
+    BUILD_CONTEXT: "."
 
-# ─── Deploy ────────────────────────────────────────────────────────────────────
-
-deploy:
-  stage: deploy
-  extends: .ssh_setup
-  tags: [k3s]
-  needs: [build]
-  environment:
-    name: production
-    url: https://fifa-card-generator.atomstudios.fr
-  resource_group: deploy
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "push"'
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-  script:
-    - |
-      odin bash <<'EOF'
-        set -e
-        sudo kubectl rollout restart deployment/fifa-card-generator-web -n apps
-        sudo kubectl rollout status deployment/fifa-card-generator-web -n apps --timeout=120s
-      EOF
-
-# ─── Verify ────────────────────────────────────────────────────────────────────
-
-verify:
-  stage: verify
-  image: registry.gitlab.ggcorp.fr/internal/docker-cache/alpine:3.23
-  needs: [deploy]
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "push"'
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-  script:
-    - apk add --no-cache curl
-    - curl -f -s --retry 5 --retry-delay 10 --retry-all-errors https://fifa-card-generator.atomstudios.fr/ > /dev/null && echo "OK"
+deploy: { extends: .deploy_web }
+verify: { extends: .verify }
