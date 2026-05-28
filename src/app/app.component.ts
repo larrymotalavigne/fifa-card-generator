@@ -798,6 +798,18 @@ interface BatchProgress {
         </div>
       </main>
 
+      <footer class="mt-12 mb-6 px-6 py-5 border-t border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 dark:text-slate-400">
+        <p class="mb-1">
+          Made by
+          <a href="https://atomstudios.fr" target="_blank" rel="noopener" class="font-semibold text-slate-700 dark:text-slate-300 hover:underline">Atom Studios</a>
+          — small studio building privacy-first tools.
+        </p>
+        <p>
+          If you need email aliases that don't read your inbox, try
+          <a href="https://smtpy.fr" target="_blank" rel="noopener" class="font-semibold text-violet-600 dark:text-violet-400 hover:underline">SMTPy</a>.
+        </p>
+      </footer>
+
     </div>
     `
 })
